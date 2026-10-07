@@ -1,66 +1,176 @@
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Inproma App initialized');
+    let currentUser = null;
 
-    let activeUserId = 1;
-    let holdings = [];
-
-    // Safe DOM element selector helper
     const getEl = (id) => document.getElementById(id);
 
-    // Elements
-    const userSelect = getEl('userSelect');
+    // Views & Alerts
+    const authView = getEl('auth-view');
+    const dashboardView = getEl('dashboard-view');
+    const authError = getEl('auth-error');
+
+    // Forms
+    const loginForm = getEl('login-form');
+    const signupForm = getEl('signup-form');
+    const showLoginBtn = getEl('show-login-btn');
+    const showSignupBtn = getEl('show-signup-btn');
+
+    // Dashboard Elements
+    const activeUsernameDisplay = getEl('active-username-display');
+    const logoutBtn = getEl('logout-btn');
     const holdingsTableBody = getEl('holdings-table-body');
-    const balancingTableBody = getEl('balancing-table-body');
-    const categoriesList = getEl('categories-list');
-    const rulesList = getEl('rules-list');
-    const runBalancingBtn = getEl('run-balancing-btn');
-    
-    // Stats
     const statTotalVal = getEl('stat-total-val');
     const statTotalCount = getEl('stat-total-count');
-    const statRebalanceStatus = getEl('stat-rebalance-status');
 
-    // Modal
+    // Modal Elements
     const addModal = getEl('add-modal');
     const openAddModalBtn = getEl('open-add-modal');
     const closeAddModalBtn = getEl('close-add-modal');
     const addHoldingForm = getEl('add-holding-form');
 
-    // Tab Navigation
-    const tabs = {
-        'holdings': { btn: getEl('tab-holdings-btn'), content: getEl('tab-holdings') },
-        'balancing': { btn: getEl('tab-balancing-btn'), content: getEl('tab-balancing') },
-        'categories': { btn: getEl('tab-categories-btn'), content: getEl('tab-categories') }
-    };
+    // 1. Initial Session Check
+    checkSession();
 
-    // Attach Tab Event Listeners Safely
-    Object.keys(tabs).forEach(tabKey => {
-        const item = tabs[tabKey];
-        if (item.btn) {
-            item.btn.addEventListener('click', () => switchTab(tabKey));
+    function checkSession() {
+        try {
+            const saved = localStorage.getItem('inproma_user');
+            if (saved) {
+                currentUser = JSON.parse(saved);
+                if (currentUser && currentUser.id) {
+                    showDashboard();
+                    return;
+                }
+            }
+        } catch (e) {
+            localStorage.removeItem('inproma_user');
         }
-    });
+        showAuth();
+    }
 
-    function switchTab(selectedKey) {
-        Object.keys(tabs).forEach(key => {
-            const item = tabs[key];
-            if (!item.btn || !item.content) return;
+    function showAuth() {
+        if (authView) authView.classList.remove('hidden');
+        if (dashboardView) dashboardView.classList.add('hidden');
+    }
 
-            if (key === selectedKey) {
-                item.content.classList.remove('hidden');
-                item.content.classList.add('block');
-                item.btn.classList.add('text-emerald-600', 'border-emerald-500', 'font-semibold');
-                item.btn.classList.remove('text-slate-500', 'border-transparent');
-            } else {
-                item.content.classList.add('hidden');
-                item.content.classList.remove('block');
-                item.btn.classList.remove('text-emerald-600', 'border-emerald-500', 'font-semibold');
-                item.btn.classList.add('text-slate-500', 'border-transparent');
+    function showDashboard() {
+        if (authView) authView.classList.add('hidden');
+        if (dashboardView) dashboardView.classList.remove('hidden');
+        if (activeUsernameDisplay && currentUser) {
+            activeUsernameDisplay.textContent = currentUser.username || 'User';
+        }
+        loadHoldings();
+    }
+
+    // 2. Auth Switcher Tabs
+    if (showLoginBtn) {
+        showLoginBtn.addEventListener('click', () => {
+            loginForm?.classList.remove('hidden');
+            signupForm?.classList.add('hidden');
+            showLoginBtn.className = "w-1/2 pb-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-600";
+            if (showSignupBtn) showSignupBtn.className = "w-1/2 pb-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-600";
+            hideError();
+        });
+    }
+
+    if (showSignupBtn) {
+        showSignupBtn.addEventListener('click', () => {
+            signupForm?.classList.remove('hidden');
+            loginForm?.classList.add('hidden');
+            showSignupBtn.className = "w-1/2 pb-3 font-semibold text-sm border-b-2 border-emerald-500 text-emerald-600";
+            if (showLoginBtn) showLoginBtn.className = "w-1/2 pb-3 font-semibold text-sm border-b-2 border-transparent text-slate-400 hover:text-slate-600";
+            hideError();
+        });
+    }
+
+    function showError(msg) {
+        if (authError) {
+            authError.textContent = msg;
+            authError.classList.remove('hidden');
+        } else {
+            alert(msg);
+        }
+    }
+
+    function hideError() {
+        if (authError) authError.classList.add('hidden');
+    }
+
+    // 3. Login Event
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError();
+
+            const payload = {
+                username: getEl('login-username')?.value.trim(),
+                password: getEl('login-password')?.value.trim()
+            };
+
+            try {
+                const res = await fetch('/api/users/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    currentUser = data;
+                    localStorage.setItem('inproma_user', JSON.stringify(currentUser));
+                    showDashboard();
+                } else {
+                    showError(data.message || 'Invalid login credentials.');
+                }
+            } catch (err) {
+                showError('Server connection error. Check backend running on port 8088.');
             }
         });
     }
 
-    // Modal Listeners
+    // 4. Signup Event
+    if (signupForm) {
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError();
+
+            const payload = {
+                username: getEl('signup-username')?.value.trim(),
+                email: getEl('signup-email')?.value.trim(),
+                password: getEl('signup-password')?.value.trim()
+            };
+
+            try {
+                const res = await fetch('/api/users/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    currentUser = data;
+                    localStorage.setItem('inproma_user', JSON.stringify(currentUser));
+                    showDashboard();
+                } else {
+                    showError(data.message || 'Sign up failed.');
+                }
+            } catch (err) {
+                showError('Server connection error. Check backend running on port 8088.');
+            }
+        });
+    }
+
+    // 5. Logout Event
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('inproma_user');
+            currentUser = null;
+            if (loginForm) loginForm.reset();
+            if (signupForm) signupForm.reset();
+            showAuth();
+        });
+    }
+
+    // 6. Modal Toggles
     if (openAddModalBtn && addModal) {
         openAddModalBtn.addEventListener('click', () => {
             addModal.classList.remove('hidden');
@@ -75,76 +185,45 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Initialize Data Fetching
-    loadUsers();
-    loadHoldings();
-    loadCategories();
-    loadRules();
-
-    if (userSelect) {
-        userSelect.addEventListener('change', (e) => {
-            activeUserId = e.target.value;
-            loadHoldings();
-        });
-    }
-
-    // 1. Load Users
-    async function loadUsers() {
-        try {
-            const res = await fetch('/api/users');
-            if (res.ok && userSelect) {
-                const users = await res.json();
-                if (users.length > 0) {
-                    userSelect.innerHTML = users.map(u => `<option value="${u.id}">${u.username || u.name || 'User ' + u.id}</option>`).join('');
-                    activeUserId = users[0].id;
-                }
-            }
-        } catch (e) {
-            console.warn('Could not fetch users list. Defaulting to User ID 1.');
-        }
-    }
-
-    // 2. Load Holdings
+    // 7. Load Holdings
     async function loadHoldings() {
-        if (!holdingsTableBody) return;
-        holdingsTableBody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">Loading holdings...</td></tr>`;
+        if (!holdingsTableBody || !currentUser) return;
+        holdingsTableBody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">Fetching live market quotes...</td></tr>`;
+
         try {
-            let res = await fetch(`/api/portfolio-holdings/user/${activeUserId}`);
-            if (!res.ok) res = await fetch('/api/portfolio-holdings');
-            
+            const res = await fetch(`/api/portfolio-holdings/user/${currentUser.id}`);
             if (res.ok) {
-                holdings = await res.json();
+                const holdings = await res.json();
                 renderHoldings(holdings);
             } else {
-                holdingsTableBody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">No holdings found.</td></tr>`;
+                holdingsTableBody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">No stock holdings found. Click + Add New Holding!</td></tr>`;
                 updateMetrics([]);
             }
         } catch (err) {
-            console.error('Error fetching holdings:', err);
-            holdingsTableBody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-red-500">Unable to load holdings data.</td></tr>`;
+            console.error('Holdings fetch error:', err);
+            holdingsTableBody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-red-500">Failed to load holdings.</td></tr>`;
         }
     }
 
     function renderHoldings(data) {
         if (!holdingsTableBody) return;
         if (!data || data.length === 0) {
-            holdingsTableBody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">No holdings available. Add one above.</td></tr>`;
+            holdingsTableBody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">No stock holdings yet. Click + Add New Holding!</td></tr>`;
             updateMetrics([]);
             return;
         }
 
         holdingsTableBody.innerHTML = data.map(item => {
-            const price = item.currentUnitPrice || item.price || 0;
+            const price = item.currentUnitPrice || 0;
             const qty = item.quantity || 0;
             const total = price * qty;
             return `
                 <tr class="hover:bg-slate-50 transition">
                     <td class="p-4 font-mono text-xs text-slate-400">#${item.id}</td>
-                    <td class="p-4 font-bold text-slate-900">${item.tickerSymbol || 'N/A'}</td>
-                    <td class="p-4 text-slate-600">${item.assetCategory ? item.assetCategory.name : 'General'}</td>
+                    <td class="p-4 font-bold text-slate-900">${item.tickerSymbol ? item.tickerSymbol.toUpperCase() : 'N/A'}</td>
                     <td class="p-4 text-slate-700">${qty}</td>
-                    <td class="p-4 text-slate-700">$${price.toFixed(2)}</td>
-                    <td class="p-4 font-semibold text-slate-900">$${total.toFixed(2)}</td>
+                    <td class="p-4 text-emerald-600 font-semibold">$${price.toFixed(2)}</td>
+                    <td class="p-4 font-bold text-slate-900">$${total.toFixed(2)}</td>
                     <td class="p-4 text-right">
                         <button onclick="deleteHolding(${item.id})" class="text-red-500 hover:text-red-700 text-xs font-semibold">Delete</button>
                     </td>
@@ -156,18 +235,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateMetrics(data) {
-        const totalVal = data.reduce((sum, item) => sum + ((item.currentUnitPrice || item.price || 0) * (item.quantity || 0)), 0);
+        const totalVal = data.reduce((sum, item) => sum + ((item.currentUnitPrice || 0) * (item.quantity || 0)), 0);
         if (statTotalVal) statTotalVal.textContent = `$${totalVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         if (statTotalCount) statTotalCount.textContent = data.length;
     }
 
-    // 3. Add Holding Form Submit
+    // 8. Add Holding Submit
     if (addHoldingForm) {
         addHoldingForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (!currentUser) return alert('Session expired. Please log in again.');
+
             const payload = {
-                userId: parseInt(activeUserId),
-                tickerSymbol: getEl('form-ticker')?.value || '',
+                userId: currentUser.id,
+                tickerSymbol: getEl('form-ticker')?.value.trim().toUpperCase(),
                 quantity: parseFloat(getEl('form-quantity')?.value || 0),
                 currentUnitPrice: parseFloat(getEl('form-price')?.value || 0)
             };
@@ -187,17 +268,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     addHoldingForm.reset();
                     loadHoldings();
                 } else {
-                    alert('Failed to save holding.');
+                    const errData = await res.json();
+                    alert(errData.message || 'Failed to add holding.');
                 }
             } catch (err) {
                 console.error('Save error:', err);
+                alert('Connection error while saving holding.');
             }
         });
     }
 
-    // 4. Delete Holding Global Handler
+    // Delete Holding Handler
     window.deleteHolding = async function(id) {
-        if (!confirm('Are you sure you want to delete this holding?')) return;
+        if (!confirm('Delete this stock holding?')) return;
         try {
             const res = await fetch(`/api/portfolio-holdings/${id}`, { method: 'DELETE' });
             if (res.ok) loadHoldings();
@@ -205,91 +288,4 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Delete error:', e);
         }
     };
-
-    // 5. Portfolio Rebalancing Engine Trigger
-    if (runBalancingBtn) {
-        runBalancingBtn.addEventListener('click', async () => {
-            if (!balancingTableBody) return;
-            balancingTableBody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">Executing balancing engine...</td></tr>`;
-            try {
-                const res = await fetch(`/api/portfolio-balancing/calculate/${activeUserId}`);
-                if (res.ok) {
-                    const results = await res.json();
-                    renderBalancingResults(results);
-                } else {
-                    balancingTableBody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-amber-600">Rebalancing calculated no changes or returned status ${res.status}.</td></tr>`;
-                }
-            } catch (err) {
-                console.error('Balancing error:', err);
-                balancingTableBody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-red-500">Error connecting to PortfolioBalancingController.</td></tr>`;
-            }
-        });
-    }
-
-    function renderBalancingResults(results) {
-        if (!balancingTableBody) return;
-        if (!results || results.length === 0) {
-            balancingTableBody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">Portfolio is fully balanced!</td></tr>`;
-            if (statRebalanceStatus) {
-                statRebalanceStatus.textContent = 'Balanced';
-                statRebalanceStatus.className = 'text-3xl font-extrabold text-emerald-500 mt-2';
-            }
-            return;
-        }
-
-        if (statRebalanceStatus) {
-            statRebalanceStatus.textContent = `${results.length} Trades Required`;
-            statRebalanceStatus.className = 'text-3xl font-extrabold text-amber-500 mt-2';
-        }
-
-        balancingTableBody.innerHTML = results.map(r => {
-            const actionColor = r.action === 'BUY' ? 'bg-emerald-100 text-emerald-800' :
-                                r.action === 'SELL' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-600';
-            return `
-                <tr class="hover:bg-slate-50 transition">
-                    <td class="p-4 font-bold text-slate-900">${r.tickerSymbol || r.categoryName || 'N/A'}</td>
-                    <td class="p-4 text-slate-600">${r.currentAllocation || 0}%</td>
-                    <td class="p-4 text-slate-600">${r.targetAllocation || 0}%</td>
-                    <td class="p-4">
-                        <span class="px-2.5 py-1 text-xs font-bold rounded-full ${actionColor}">${r.action || 'HOLD'}</span>
-                    </td>
-                    <td class="p-4 font-semibold text-slate-900">$${Math.abs(r.recommendedAmount || 0).toFixed(2)}</td>
-                    <td class="p-4 text-slate-700">${r.unitsToTrade || 0}</td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    // 6. Helpers
-    async function loadCategories() {
-        if (!categoriesList) return;
-        try {
-            const res = await fetch('/api/asset-categories');
-            if (res.ok) {
-                const data = await res.json();
-                categoriesList.innerHTML = data.map(c => `
-                    <li class="py-3 flex justify-between items-center">
-                        <span class="font-medium text-slate-800">${c.name}</span>
-                        <span class="text-xs text-slate-400">${c.description || 'Category'}</span>
-                    </li>
-                `).join('');
-            }
-        } catch (e) {}
-    }
-
-    async function loadRules() {
-        if (!rulesList) return;
-        try {
-            const res = await fetch('/api/portfolio-rules');
-            if (res.ok) {
-                const data = await res.json();
-                rulesList.innerHTML = data.map(r => `
-                    <li class="py-3 flex justify-between items-center">
-                        <span class="font-medium text-slate-800">${r.ruleName || 'Rule #' + r.id}</span>
-                        <span class="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">${r.thresholdPercentage || 0}% Drift</span>
-                    </li>
-                `).join('');
-            }
-        } catch (e) {}
-    }
 });
