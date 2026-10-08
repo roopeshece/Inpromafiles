@@ -63,4 +63,14 @@ public class PortfolioHolding {
     public void setCurrentUnitPrice(Double currentUnitPrice) {
         this.currentUnitPrice = currentUnitPrice;
     }
+
+    public Object getUser() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'getUser'");
+    }
+
+    public Object getCategory() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'getCategory'");
+    }
 }

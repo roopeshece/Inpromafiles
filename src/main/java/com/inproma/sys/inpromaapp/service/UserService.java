@@ -23,19 +23,22 @@ public class UserService {
     }
 
     // Get user by ID
-    public Optional<User> getUserById(Integer userId) {
+    public Optional<User> getUserById(Long userId) {
         return userRepository.findById(userId);
     }
 
     // Get user by email
     public Optional<User> getUserByEmail(String email) {
-        return userRepository.findByEmail(email);
+        return userRepository.findAll().stream()
+                .filter(user -> user.getEmail().equalsIgnoreCase(email))
+                .findFirst();
     }
 
     // Create user
     public User createUser(User user) {
 
-        if (userRepository.existsByEmail(user.getEmail())) {
+        if (userRepository.findAll().stream()
+                .anyMatch(existingUser -> existingUser.getEmail().equalsIgnoreCase(user.getEmail()))) {
             throw new RuntimeException("Email already registered");
         }
 
@@ -43,12 +46,12 @@ public class UserService {
     }
 
     // Update user
-    public User updateUser(Integer userId, User updatedUser) {
+    public User updateUser(Long userId, User updatedUser) {
 
         User existingUser = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        existingUser.setName(updatedUser.getName());
+        existingUser.setUsername(updatedUser.getUsername());
         existingUser.setEmail(updatedUser.getEmail());
         existingUser.setPassword(updatedUser.getPassword());
         existingUser.setRole(updatedUser.getRole());
@@ -57,7 +60,7 @@ public class UserService {
     }
 
     // Delete user
-    public void deleteUser(Integer userId) {
+    public void deleteUser(Long userId) {
 
         if (!userRepository.existsById(userId)) {
             throw new RuntimeException("User not found");

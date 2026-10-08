@@ -29,7 +29,7 @@ public class InvestmentProfileService {
         }
 
         if (profileRepository.existsByUserUserId(
-                profile.getUser().getUserId())) {
+                Math.toIntExact(profile.getUser().getId()))) {
             throw new RuntimeException(
                     "Investment profile already exists for this user");
         }

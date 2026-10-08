@@ -1,5 +1,6 @@
 package com.inproma.sys.inpromaapp.service;
 
+import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -9,6 +10,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
+import com.inproma.sys.inpromaapp.entity.AssetCategory;
 import com.inproma.sys.inpromaapp.entity.InvestmentProfile;
 import com.inproma.sys.inpromaapp.entity.PortfolioHolding;
 import com.inproma.sys.inpromaapp.entity.PortfolioRule;
@@ -44,8 +46,10 @@ public class PortfolioBalancingService {
                                         "Investment profile not found"));
 
         // Get user's holdings
-        List<PortfolioHolding> holdings =
-                holdingRepository.findByUserUserId(userId);
+        List<PortfolioHolding> holdings = holdingRepository.findAll().stream()
+                .filter(holding -> holding.getUser() != null
+                        && userId.equals(((PortfolioHolding) holding.getUser()).getUserId()))
+                .toList();
 
         // Get recommended rules based on risk tolerance
         List<PortfolioRule> rules =
@@ -59,9 +63,9 @@ BigDecimal totalValue = BigDecimal.ZERO;
 
 for (PortfolioHolding holding : holdings) {
 
-    if (holding.getCurrentValue() != null) {
+    if (holding.getCurrentUnitPrice() != null) {
         totalValue = totalValue.add(
-                holding.getCurrentValue()
+                null
         );
     }
 }
@@ -83,12 +87,13 @@ for (PortfolioHolding holding : holdings) {
             BigDecimal actualValue = holdings.stream()
         .filter(holding ->
                 holding.getCategory() != null &&
-                holding.getCategory()
+                ((AssetCategory) holding.getCategory())
                         .getCategoryId()
                         .equals(categoryId))
-        .map(holding -> holding.getCurrentValue())
-        .reduce(BigDecimal.ZERO, (total, value) ->
-                value == null ? total : total.add(value));
+        .map(holding -> holding.getCurrentUnitPrice() == null
+                ? BigDecimal.ZERO
+                : BigDecimal.valueOf(holding.getCurrentUnitPrice()))
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             BigDecimal actualPercentage = BigDecimal.ZERO;
 
