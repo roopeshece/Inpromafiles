@@ -1,72 +1,61 @@
 package com.inproma.sys.inpromaapp.controller;
 
-import java.util.List;
-
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
 import com.inproma.sys.inpromaapp.entity.User;
-import com.inproma.sys.inpromaapp.service.UserService;
+import com.inproma.sys.inpromaapp.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/users")
+@CrossOrigin(origins = "*")
 public class UserController {
 
-    private final UserService userService;
+    @Autowired
+    private UserRepository userRepository;
 
-    public UserController(UserService userService) {
-        this.userService = userService;
+    @PostMapping("/signup")
+    public ResponseEntity<?> registerUser(@RequestBody User user) {
+        try {
+            if (user.getUsername() == null || user.getUsername().trim().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Username is required"));
+            }
+            if (userRepository.existsByUsername(user.getUsername())) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Username '" + user.getUsername() + "' is already taken!"));
+            }
+            if (user.getRole() == null) {
+                user.setRole("USER");
+            }
+            User savedUser = userRepository.save(user);
+            return ResponseEntity.status(HttpStatus.CREATED).body(savedUser);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Database Error: " + e.getMessage()));
+        }
     }
 
-    // Get all users
-    @GetMapping
-    public List<User> getAllUsers() {
-        return userService.getAllUsers();
-    }
+    @PostMapping("/login")
+    public ResponseEntity<?> loginUser(@RequestBody Map<String, String> loginRequest) {
+        try {
+            String username = loginRequest.get("username");
+            String password = loginRequest.get("password");
 
-    // Get user by ID
-    @GetMapping("/{userId}")
-    public ResponseEntity<User> getUserById(
-            @PathVariable Integer userId) {
+            if (username == null || password == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Username and password are required"));
+            }
 
-        return userService.getUserById(userId)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
+            Optional<User> userOpt = userRepository.findByUsername(username);
 
-    // Create user
-    @PostMapping
-    public ResponseEntity<User> createUser(
-            @RequestBody User user) {
-
-        return ResponseEntity.ok(userService.createUser(user));
-    }
-
-    // Update user
-    @PutMapping("/{userId}")
-    public ResponseEntity<User> updateUser(
-            @PathVariable Integer userId,
-            @RequestBody User user) {
-
-        return ResponseEntity.ok(
-                userService.updateUser(userId, user)
-        );
-    }
-
-    // Delete user
-    @DeleteMapping("/{userId}")
-    public ResponseEntity<Void> deleteUser(
-            @PathVariable Integer userId) {
-
-        userService.deleteUser(userId);
-
-        return ResponseEntity.noContent().build();
+            if (userOpt.isPresent() && password.equals(userOpt.get().getPassword())) {
+                return ResponseEntity.ok(userOpt.get());
+            } else {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid username or password"));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", "Login Server Error: " + e.getMessage()));
+        }
     }
 }
